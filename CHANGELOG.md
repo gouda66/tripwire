@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- `grant` now requires the approver to type their name; a pseudo-terminal alone
+  was not a reliable "a human is present" check. Removed the non-interactive
+  override variable. Verified end to end with a live Claude Code session.
+
 ## 0.2.0
 
 - AI agent guard: `install-claude-hook`, `claude-hook`, `pending`, `grant`.

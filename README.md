@@ -89,7 +89,9 @@ The agent acts as its own identity (`TRIPWIRE_AI_ACTOR`, default `ai-agent`),
 which is not an owner unless you list it. When it tries to `Edit`, `MultiEdit`
 or `Write` a protected block, the call is refused with a message naming who may
 approve it, and the request is recorded. A human then approves that exact
-change **from an interactive terminal**:
+change **from an interactive terminal**; `grant` shows the request and makes
+the person type the approver's name to confirm (a pseudo-terminal alone is not
+trusted):
 
 ```bash
 tripwire pending                                  # what was blocked
@@ -106,8 +108,10 @@ Limits: shell commands that rewrite files (`sed -i`, redirects, scripts) are not
 inspected, so keep the pre-commit hook and the server / CI check as backstops.
 `grant` trusts whoever runs it in a terminal; a person with shell access can
 also edit `.tripwire/approvals.json` by hand. Verified with simulated hook
-payloads in the documented format, not yet end to end inside a live Claude Code
-session.
+payloads and end to end with a live Claude Code 2.1 session: the edit was
+refused with the message shown to the agent, a human `grant` let the identical
+retry through, and the agent's own attempt to run `tripwire grant` did not
+approve anything.
 
 ## Platforms
 

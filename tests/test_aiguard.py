@@ -29,8 +29,16 @@ def repo(tmp_path, monkeypatch):
     git(tmp_path, "add", "-A")
     git(tmp_path, "commit", "-q", "-m", "init")
     monkeypatch.delenv("TRIPWIRE_AI_ACTOR", raising=False)
-    monkeypatch.setenv("TRIPWIRE_ALLOW_NONINTERACTIVE", "1")
     return tmp_path
+
+
+class FakeTTY(io.StringIO):
+    def isatty(self):
+        return True
+
+
+def tty(monkeypatch, text):
+    monkeypatch.setattr(sys, "stdin", FakeTTY(text))
 
 
 def hook(repo, monkeypatch, tool, tool_input):
@@ -106,7 +114,12 @@ def test_grant_then_same_edit_is_allowed_but_other_edit_is_not(repo, monkeypatch
     assert hook(repo, monkeypatch, "Edit", e) == 2
     assert main(["--repo", str(repo), "pending"]) == 0
     digest = json.loads((repo / ".git" / "tripwire" / "pending.json").read_text())[0]["digest"]
+    tty(monkeypatch, "bob\n")
     assert main(["--repo", str(repo), "grant", digest[:10], "--approver", "bob"]) == 1  # not an approver
+    tty(monkeypatch, "olga\n")
+    assert main(["--repo", str(repo), "grant", digest[:10], "--approver", "anna"]) == 1  # wrong confirmation
+    assert not (repo / ".tripwire" / "approvals.json").exists()
+    tty(monkeypatch, "anna\n")
     assert main(["--repo", str(repo), "grant", digest[:10], "--approver", "anna"]) == 0
     assert hook(repo, monkeypatch, "Edit", e) == 0
     assert hook(repo, monkeypatch, "Edit", edit(repo, "rate = 5", "rate = 10")) == 2  # approval was for rate = 9
@@ -115,8 +128,7 @@ def test_grant_then_same_edit_is_allowed_but_other_edit_is_not(repo, monkeypatch
 def test_grant_refuses_non_interactive_use(repo, monkeypatch):
     hook(repo, monkeypatch, "Edit", edit(repo, "rate = 5", "rate = 9"))
     digest = json.loads((repo / ".git" / "tripwire" / "pending.json").read_text())[0]["digest"]
-    monkeypatch.delenv("TRIPWIRE_ALLOW_NONINTERACTIVE")
-    monkeypatch.setattr(sys, "stdin", io.StringIO(""))
+    monkeypatch.setattr(sys, "stdin", io.StringIO("anna\n"))  # piped input is not a terminal
     assert main(["--repo", str(repo), "grant", digest[:10], "--approver", "anna"]) == 1
     assert not (repo / ".tripwire" / "approvals.json").exists()
 

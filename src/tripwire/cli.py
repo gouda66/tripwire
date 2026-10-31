@@ -185,7 +185,7 @@ def cmd_pending(args, root: str) -> int:
 def cmd_grant(args, root: str) -> int:
     from .aiguard import load_pending, save_pending
 
-    if not sys.stdin.isatty() and not os.environ.get("TRIPWIRE_ALLOW_NONINTERACTIVE"):
+    if not sys.stdin.isatty():
         print("tripwire: grant must be run by a human in an interactive terminal", file=sys.stderr)
         return 1
     items = load_pending(root)
@@ -203,6 +203,13 @@ def cmd_grant(args, root: str) -> int:
     allowed = set(config.leaders) | (set(lock.owners) | set(lock.approvers) if lock else set())
     if args.approver not in allowed:
         print("tripwire: %s may not approve %s" % (args.approver, item["lock"]), file=sys.stderr)
+        return 1
+    # A pseudo-terminal alone proves nothing (agents can have one), so a person must type the name.
+    print("Approving: %s" % item["message"])
+    sys.stdout.write("Type the approver name '%s' to confirm: " % args.approver)
+    sys.stdout.flush()
+    if sys.stdin.readline().strip() != args.approver:
+        print("tripwire: confirmation did not match; nothing approved", file=sys.stderr)
         return 1
     path = os.path.join(root, APPROVALS_PATH)
     existing: List[Approval] = []
