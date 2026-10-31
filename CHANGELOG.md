@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - AI agent guard: `install-claude-hook`, `claude-hook`, `pending`, `grant`.
   A Claude Code PreToolUse hook blocks edits to protected blocks before they
