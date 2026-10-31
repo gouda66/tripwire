@@ -1,0 +1,30 @@
+# Copy to .github/workflows/tripwire.yml, then make the "tripwire" check
+# required in branch protection and forbid direct pushes to the branch.
+# Also protect .github/workflows/ with a path lock in .tripwire/locks.json,
+# otherwise a PR can simply delete this workflow.
+name: tripwire
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  tripwire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install tripwire
+      - run: tripwire github-check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

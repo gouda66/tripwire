@@ -1,0 +1,17 @@
+# Add to .gitlab-ci.yml. Then:
+#  - make the pipeline required: Settings > Merge requests > "Pipelines must succeed"
+#  - enable "Remove all approvals when commits are added to the source branch"
+#  - protect the target branch (no direct pushes)
+#  - add a path lock for .gitlab-ci.yml in .tripwire/locks.json, otherwise an MR
+#    can simply delete this job
+#  - create a project access token with read_api scope and store it as the
+#    masked CI variable GITLAB_TOKEN (the job token cannot read approvals)
+tripwire:
+  image: python:3.12
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - pip install tripwire
+    - tripwire gitlab-check

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Install as <bare-repo>/hooks/pre-receive (chmod +x).
+# The pusher identity must come from your server's authentication,
+# e.g. export TRIPWIRE_ACTOR="$GL_USERNAME" before this line.
+exec python -m tripwire pre-receive

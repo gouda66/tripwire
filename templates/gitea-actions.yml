@@ -1,0 +1,29 @@
+# Gitea / Forgejo Actions. Copy to .gitea/workflows/tripwire.yml (Forgejo:
+# .forgejo/workflows/), then in branch protection:
+#  - require the "tripwire" status check and forbid direct pushes
+#  - enable "Dismiss stale approvals" (tripwire also ignores stale reviews)
+#  - add a path lock for the workflow directory in .tripwire/locks.json,
+#    otherwise a PR can simply delete this workflow
+# GITHUB_TOKEN here is the token Actions provides; it needs read access to PRs.
+name: tripwire
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+jobs:
+  tripwire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install tripwire
+      - run: tripwire gitea-check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

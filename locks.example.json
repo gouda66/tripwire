@@ -1,0 +1,7 @@
+{
+  "leaders": ["alice"],
+  "locks": [
+    {"id": "billing", "owners": ["bob"], "approvers": ["carol"]},
+    {"id": "prod-config", "owners": ["bob"], "paths": ["config/prod/", "*.pem"]}
+  ]
+}
