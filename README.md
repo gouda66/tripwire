@@ -52,6 +52,41 @@ required check on GitHub, GitLab and Gitea / Forgejo.
   Unclosed blocks extend to end of file. A marker whose id is missing from the
   rules is leaders-only.
 
+## Rules file reference
+
+```json
+{
+  "whitespace": "ignore",
+  "groups": {"finance": ["bob", "carol"], "all": ["@finance", "dave"]},
+  "leaders": ["alice", "@org/platform"],
+  "locks": [
+    {"id": "billing", "owners": ["@finance"], "approvers": ["@all"]},
+    {"id": "py-core", "owners": ["bob"], "paths": ["src/core/"], "whitespace": "indent"}
+  ]
+}
+```
+
+- `groups`: reusable lists, referenced as `@name` (groups may contain groups).
+- `@org/team`: a platform team. The GitHub adapter resolves it through the API
+  (the token needs `read:org`); other adapters leave it unresolved, so it never
+  matches anybody. `tripwire validate` warns about this.
+- `whitespace`: `ignore` (default) treats re-indenting as no change; `indent`
+  keeps leading whitespace significant, for Python and similar. Set it globally
+  or per lock. Trailing whitespace and blank lines never count.
+- `paths`: `dir/` prefix or a glob (`*` also matches `/`).
+
+Helpers:
+
+```bash
+tripwire validate                                     # lint the rules against the repository
+tripwire import-codeowners --leader alice --write     # start from an existing CODEOWNERS
+```
+
+`import-codeowners` turns every CODEOWNERS pattern into a path lock. CODEOWNERS
+applies "last match wins"; tripwire locks are additive, so it is stricter only
+where a later pattern deliberately narrows an earlier one. Sections and email
+owners are skipped with a warning. Set `leaders` before relying on the result.
+
 ## Commands
 
 ```bash
@@ -130,7 +165,8 @@ path lock for the CI configuration, otherwise a PR can delete the check.
 
 **GitHub.** Only a reviewer's latest review counts; it must be `APPROVED` on
 the PR's current head commit, so a new push voids it. Reviewer logins are
-matched to names in `locks.json` case-insensitively; teams are not supported.
+matched to names in `locks.json` case-insensitively; `@org/team` entries are
+resolved through the API.
 
 **GitLab.** Store a `read_api` project access token as `GITLAB_TOKEN`. GitLab's
 approvals endpoint is not bound to a commit, so enable "Remove all approvals
@@ -157,8 +193,11 @@ reviews are ignored. The API base comes from `--gitea-url`, `GITEA_API_URL`,
 - On every platform, people who can edit branch protection or CI settings are
   trusted; tripwire cannot stop an admin from switching the rule off.
 - Pushes with several authors are checked as one cumulative diff by the pusher.
-- Whitespace-insensitive comparison also ignores indentation changes.
-- Not yet: platform teams, Bitbucket, Azure DevOps, Gerrit, CODEOWNERS import.
+- By default re-indenting is not a change; set `"whitespace": "indent"` for
+  languages where indentation matters.
+- Platform teams (`@org/team`) are resolved on GitHub only (simulated API tests;
+  not run against a real organization).
+- Not yet: GitLab groups and Gitea teams, Bitbucket, Azure DevOps, Gerrit.
 
 ## Development
 

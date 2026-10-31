@@ -243,6 +243,55 @@ def cmd_install_claude_hook(args, root: str) -> int:
     return 0
 
 
+def cmd_validate(args, root: str) -> int:
+    from .validate import validate
+
+    path = args.file or os.path.join(root, RULES_PATH)
+    if not os.path.isfile(path):
+        print("tripwire: %s not found" % path, file=sys.stderr)
+        return 2
+    with open(path, encoding="utf-8") as fh:
+        errors, warnings = validate(root, fh.read())
+    for e in errors:
+        print("error:   " + e, file=sys.stderr)
+    for w in warnings:
+        print("warning: " + w)
+    print("tripwire: %d error(s), %d warning(s)" % (len(errors), len(warnings)))
+    return 1 if errors else 0
+
+
+def cmd_import_codeowners(args, root: str) -> int:
+    from . import codeowners
+
+    source = args.file
+    if source is None:
+        for cand in codeowners.CANDIDATES:
+            if os.path.isfile(os.path.join(root, cand)):
+                source = os.path.join(root, cand)
+                break
+    if source is None or not os.path.isfile(source):
+        print("tripwire: no CODEOWNERS file found; pass --file", file=sys.stderr)
+        return 2
+    with open(source, encoding="utf-8") as fh:
+        entries, warnings = codeowners.parse(fh.read())
+    config = codeowners.to_config(entries, args.leader or [])
+    for w in warnings:
+        print("warning: " + w, file=sys.stderr)
+    text = json.dumps(config, indent=2) + "\n"
+    if not args.write:
+        sys.stdout.write(text)
+        return 0
+    target = os.path.join(root, RULES_PATH)
+    if os.path.exists(target) and not args.force:
+        print("tripwire: %s already exists; use --force to replace it" % RULES_PATH, file=sys.stderr)
+        return 1
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    with open(target, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    print("tripwire: wrote %d lock(s) to %s; set leaders before relying on it" % (len(config["locks"]), RULES_PATH))
+    return 0
+
+
 def cmd_approve(args, root: str) -> int:
     config, decision = run_check(root, args.base, args.head, actor="")
     if config is None:
@@ -321,6 +370,17 @@ def build_parser() -> argparse.ArgumentParser:
     gr.add_argument("digest", help="id (prefix) from `tripwire pending`")
     gr.add_argument("--approver", required=True)
     gr.set_defaults(func=cmd_grant)
+
+    v = sub.add_parser("validate", help="check the rules file against the repository")
+    v.add_argument("--file", help="rules file (default: .tripwire/locks.json)")
+    v.set_defaults(func=cmd_validate)
+
+    ic = sub.add_parser("import-codeowners", help="turn a CODEOWNERS file into path locks")
+    ic.add_argument("--file", help="CODEOWNERS path (default: search the usual places)")
+    ic.add_argument("--leader", action="append", help="leader name (repeatable)")
+    ic.add_argument("--write", action="store_true", help="write .tripwire/locks.json instead of printing")
+    ic.add_argument("--force", action="store_true", help="overwrite an existing rules file")
+    ic.set_defaults(func=cmd_import_codeowners)
 
     a = sub.add_parser("approve", help="record an approval for the pending change")
     a.add_argument("--base", required=True)

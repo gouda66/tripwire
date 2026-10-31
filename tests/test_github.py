@@ -27,6 +27,9 @@ class FakeClient:
     def get_branch_sha(self, branch):
         return self.tip
 
+    def get_team_members(self, ref):
+        raise AssertionError("no team refs expected in these tests")
+
     def get_pull(self, number):
         return self.pr
 

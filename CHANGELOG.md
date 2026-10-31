@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- Rules: `groups` (reusable lists, `@name`), platform teams (`@org/team`, resolved on
+  GitHub), `whitespace` mode `indent` globally or per lock.
+- `tripwire validate` lints the rules against the repository.
+- `tripwire import-codeowners` converts a CODEOWNERS file into path locks
+  (checked against the CODEOWNERS of github/docs, vscode and pytorch).
+
 ## 0.2.1
 
 - `grant` now requires the approver to type their name; a pseudo-terminal alone

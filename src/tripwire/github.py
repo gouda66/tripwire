@@ -44,6 +44,15 @@ class GitHubClient:
     def get_branch_sha(self, branch: str) -> str:
         return self._all("branches/" + quote(branch, safe="/"))[0]["commit"]["sha"]
 
+    def get_team_members(self, ref: str) -> List[str]:
+        """Logins in a team given as "@org/team". Needs a token that may read org members."""
+        org, slug = ref[1:].split("/", 1)
+        url = "%s/orgs/%s/teams/%s/members?per_page=100" % (self.api_url, quote(org), quote(slug))
+        try:
+            return [m["login"] for m in get_all(self._fetch, url)]
+        except Exception as exc:  # fail closed: an unresolved team must not silently shrink
+            raise ConfigError("cannot read members of team %s (token needs read:org): %s" % (ref, exc))
+
 
 def approved_logins(reviews: Iterable[dict], head_sha: str) -> Set[str]:
     """Logins whose latest decisive review is an approval of `head_sha`."""
@@ -61,4 +70,4 @@ def check_pull_request(root: str, client: GitHubClient, number: int) -> Decision
     approvers = approved_logins(client.get_reviews(number), head_sha)
     # pr["base"]["sha"] is stale once the target branch moves; use its current tip for the rules.
     target_sha = client.get_branch_sha(pr["base"]["ref"])
-    return check_review(root, target_sha, head_sha, pr["user"]["login"], approvers)
+    return check_review(root, target_sha, head_sha, pr["user"]["login"], approvers, client.get_team_members)

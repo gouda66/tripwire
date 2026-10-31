@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterable
+from typing import Callable, Dict, Iterable, Optional, Sequence
 
 from .config import RULES_PATH, parse_config
 from .engine import evaluate
@@ -10,7 +10,14 @@ from .gitio import RevSource, collect_changes, git
 from .models import Approval, Decision
 
 
-def check_review(root: str, target_sha: str, head_sha: str, author: str, approvers: Iterable[str]) -> Decision:
+def check_review(
+    root: str,
+    target_sha: str,
+    head_sha: str,
+    author: str,
+    approvers: Iterable[str],
+    resolve_team: Optional[Callable[[str], Sequence[str]]] = None,
+) -> Decision:
     """Evaluate a pull/merge request.
 
     Rules come from the target branch tip (`target_sha`), the diff from the
@@ -21,6 +28,8 @@ def check_review(root: str, target_sha: str, head_sha: str, author: str, approve
     if rules is None:
         return Decision()
     config = parse_config(rules)
+    if resolve_team is not None and config.team_refs():
+        config = config.expand_teams(resolve_team)
     names: Dict[str, str] = {name.lower(): name for name in config.everyone()}
     actor = names.get(author.lower(), author)
 
