@@ -1,0 +1,7 @@
+- id: tripwire
+  name: tripwire
+  description: Block staged changes to protected code blocks without owner / leader / approval.
+  entry: tripwire preflight --staged
+  language: python
+  pass_filenames: false
+  always_run: true

@@ -122,3 +122,32 @@ def test_server_hook_new_branch(repo, remote):
     assert git(repo, "push", str(remote), "feature", env=env).returncode != 0
     env["TRIPWIRE_ACTOR"] = "olga"
     assert git(repo, "push", str(remote), "feature", env=env).returncode == 0
+
+
+def test_staged_check_ignores_unstaged_edit(repo):
+    edit(repo, CODE.replace("5", "9"))
+    assert run(repo, "preflight", "--staged", "--actor", "mallory") == 0
+    git(repo, "add", "app.py")
+    assert run(repo, "preflight", "--staged", "--actor", "mallory") == 1
+    assert run(repo, "preflight", "--staged", "--actor", "olga") == 0
+
+
+def test_install_hook_refuses_to_overwrite_foreign_hook(repo):
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\necho mine\n")
+    assert run(repo, "install-hook") == 1
+    assert "mine" in hook.read_text()
+    assert run(repo, "install-hook", "--force") == 0
+    assert run(repo, "install-hook") == 0  # our own hook may be refreshed
+
+
+def test_pre_commit_hook_blocks_real_commit(repo):
+    assert run(repo, "install-hook") == 0
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text('#!/bin/sh\nexec "%s" -m tripwire preflight --staged\n' % sys.executable.replace("\\", "/"))
+    edit(repo, CODE.replace("5", "9"))
+    env = {"TRIPWIRE_ACTOR": "mallory", "PYTHONPATH": SRC}
+    git(repo, "add", "app.py")
+    assert git(repo, "commit", "-m", "x", env=env).returncode != 0
+    env["TRIPWIRE_ACTOR"] = "olga"
+    assert git(repo, "commit", "-m", "x", env=env).returncode == 0

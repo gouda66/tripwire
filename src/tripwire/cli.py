@@ -69,8 +69,37 @@ def cmd_check(args, root: str) -> int:
 def cmd_preflight(args, root: str) -> int:
     actor = resolve_actor(args.actor, root)
     has_head = git(root, "rev-parse", "--verify", "-q", "HEAD", check=False).strip()
-    _, decision = run_check(root, "HEAD" if has_head else EMPTY_TREE, None, actor)
+    _, decision = run_check(root, "HEAD" if has_head else EMPTY_TREE, "" if args.staged else None, actor)
     return report(decision)
+
+
+HOOK_MARK = "# installed by tripwire"
+HOOK = """#!/bin/sh
+%s
+# Local early warning. Bypassable with --no-verify: the server-side check is the real gate.
+if command -v tripwire >/dev/null 2>&1; then
+  exec tripwire preflight --staged
+else
+  exec python -m tripwire preflight --staged
+fi
+""" % HOOK_MARK
+
+
+def cmd_install_hook(args, root: str) -> int:
+    hooks = git(root, "rev-parse", "--git-path", "hooks").decode().strip()
+    path = os.path.join(root, hooks, "pre-commit") if not os.path.isabs(hooks) else os.path.join(hooks, "pre-commit")
+    if os.path.exists(path):
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            ours = HOOK_MARK in fh.read()
+        if not ours and not args.force:
+            print("tripwire: %s already exists; use --force to replace it" % path, file=sys.stderr)
+            return 1
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(HOOK)
+    os.chmod(path, 0o755)
+    print("tripwire: installed %s" % path)
+    return 0
 
 
 def cmd_pre_receive(args, root: str) -> int:
@@ -169,7 +198,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     f = sub.add_parser("preflight", help="check uncommitted changes against HEAD")
     f.add_argument("--actor")
+    f.add_argument("--staged", action="store_true", help="check only staged changes (for pre-commit)")
     f.set_defaults(func=cmd_preflight)
+
+    h = sub.add_parser("install-hook", help="install a local pre-commit hook")
+    h.add_argument("--force", action="store_true", help="replace an existing pre-commit hook")
+    h.set_defaults(func=cmd_install_hook)
 
     r = sub.add_parser("pre-receive", help="server hook: read ref updates from stdin")
     r.add_argument("--actor")

@@ -58,11 +58,24 @@ required check on GitHub, GitLab and Gitea / Forgejo.
 tripwire preflight --actor alice                              # uncommitted changes vs HEAD
 tripwire check --base origin/main --head HEAD --actor alice   # a commit range
 tripwire approve --base origin/main --head HEAD --approver carol  # local approvals file
+tripwire preflight --staged                                   # staged changes only
+tripwire install-hook                                         # local pre-commit hook
 tripwire pre-receive                                          # server hook, reads stdin
 tripwire github-check | gitlab-check | gitea-check            # pull / merge requests
 ```
 
 Exit codes: 0 allowed, 1 blocked, 2 error (fails closed).
+
+## Local early warning
+
+`tripwire install-hook` installs a `pre-commit` hook that checks staged changes
+and refuses the commit when a protected block is touched without permission
+(or use `.pre-commit-hooks.yaml` with the pre-commit framework). Your Git
+identity (`git config user.email`, or `TRIPWIRE_ACTOR`) must match a name in
+`locks.json`. This is a convenience: `git commit --no-verify` skips it, so the
+server-side or CI check below remains the real gate. Nothing can stop someone
+from editing files in their own clone; tripwire stops unapproved changes from
+landing on protected branches.
 
 ## Platforms
 

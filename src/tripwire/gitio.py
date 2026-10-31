@@ -51,6 +51,9 @@ def _split(raw: bytes) -> List[str]:
 
 
 def changed_paths(cwd: str, base: str, head: Optional[str]) -> List[str]:
+    """head=None is the working tree, head="" is the index (staged changes)."""
+    if head == "":
+        return _split(git(cwd, "diff", "--cached", "--name-only", "-z", "--no-renames", base))
     if head is not None:
         return _split(git(cwd, "diff", "--name-only", "-z", "--no-renames", base, head))
     tracked = _split(git(cwd, "diff", "--name-only", "-z", "--no-renames", base))
