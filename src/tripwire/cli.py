@@ -157,6 +157,85 @@ def cmd_gitlab_check(args, root: str) -> int:
     return report(check_merge_request(root, GitLabClient.from_env(args.gitlab_project), int(iid)))
 
 
+def cmd_claude_hook(args, root: str) -> int:
+    from .aiguard import check_tool_call
+
+    decision = check_tool_call(root, json.load(sys.stdin))
+    if decision.allowed:
+        return 0
+    print("tripwire: blocked for the AI agent", file=sys.stderr)
+    for v in decision.violations:
+        print("  - " + v.message, file=sys.stderr)
+    if any(v.digest for v in decision.violations):
+        print("A human can approve this exact change with `tripwire pending` and `tripwire grant <id> --approver <name>`; then retry the same edit.", file=sys.stderr)
+    return 2  # exit code 2 makes Claude Code refuse the tool call and show stderr to the agent
+
+
+def cmd_pending(args, root: str) -> int:
+    from .aiguard import load_pending
+
+    items = load_pending(root)
+    for i in items:
+        print("%s  %s  %s" % (i["digest"][:12], i["lock"], i["message"]))
+    if not items:
+        print("tripwire: no pending requests")
+    return 0
+
+
+def cmd_grant(args, root: str) -> int:
+    from .aiguard import load_pending, save_pending
+
+    if not sys.stdin.isatty() and not os.environ.get("TRIPWIRE_ALLOW_NONINTERACTIVE"):
+        print("tripwire: grant must be run by a human in an interactive terminal", file=sys.stderr)
+        return 1
+    items = load_pending(root)
+    matches = [i for i in items if i["digest"].startswith(args.digest)]
+    if len(matches) != 1:
+        print("tripwire: %d pending requests match %r" % (len(matches), args.digest), file=sys.stderr)
+        return 1
+    item = matches[0]
+    rules = RevSource(root, "HEAD").read(RULES_PATH)
+    if rules is None:
+        print("tripwire: no rules file at HEAD", file=sys.stderr)
+        return 2
+    config = parse_config(rules)
+    lock = config.get(item["lock"])
+    allowed = set(config.leaders) | (set(lock.owners) | set(lock.approvers) if lock else set())
+    if args.approver not in allowed:
+        print("tripwire: %s may not approve %s" % (args.approver, item["lock"]), file=sys.stderr)
+        return 1
+    path = os.path.join(root, APPROVALS_PATH)
+    existing: List[Approval] = []
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as fh:
+            existing = parse_local(fh.read())
+    existing.append(Approval(item["lock"], args.approver, item["digest"]))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(dump_local(existing))
+    save_pending(root, [i for i in items if i is not item])
+    print("tripwire: approved %s as %s" % (item["digest"][:12], args.approver))
+    return 0
+
+
+def cmd_install_claude_hook(args, root: str) -> int:
+    path = os.path.join(root, ".claude", "settings.json")
+    settings = {}
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as fh:
+            settings = json.load(fh)
+    entry = {"type": "command", "command": args.command}
+    groups = settings.setdefault("hooks", {}).setdefault("PreToolUse", [])
+    if not any(entry in g.get("hooks", []) for g in groups):
+        groups.append({"matcher": "Edit|Write|MultiEdit|Bash", "hooks": [entry]})
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(settings, fh, indent=2)
+        fh.write("\n")
+    print("tripwire: Claude Code hook installed in %s" % path)
+    return 0
+
+
 def cmd_approve(args, root: str) -> int:
     config, decision = run_check(root, args.base, args.head, actor="")
     if config is None:
@@ -225,6 +304,17 @@ def build_parser() -> argparse.ArgumentParser:
     gl.add_argument("--gitlab-project", help="project id or path (default: CI_PROJECT_ID)")
     gl.set_defaults(func=cmd_gitlab_check)
 
+    sub.add_parser("claude-hook", help="Claude Code PreToolUse hook: reads the tool call from stdin").set_defaults(func=cmd_claude_hook)
+    ih = sub.add_parser("install-claude-hook", help="add the hook to .claude/settings.json")
+    ih.add_argument("--command", default="tripwire claude-hook", help="hook command (default: tripwire claude-hook)")
+    ih.set_defaults(func=cmd_install_claude_hook)
+    sub.add_parser("pending", help="list edits the AI agent was blocked from making").set_defaults(func=cmd_pending)
+
+    gr = sub.add_parser("grant", help="a human approves a pending AI edit (interactive terminal only)")
+    gr.add_argument("digest", help="id (prefix) from `tripwire pending`")
+    gr.add_argument("--approver", required=True)
+    gr.set_defaults(func=cmd_grant)
+
     a = sub.add_parser("approve", help="record an approval for the pending change")
     a.add_argument("--base", required=True)
     a.add_argument("--head")
@@ -237,7 +327,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        root = toplevel(args.repo) if args.command != "pre-receive" else os.path.abspath(args.repo)
+        if args.command == "claude-hook":
+            try:
+                root = toplevel(args.repo)
+            except GitError:
+                return 0  # not a git repository: nothing to guard
+        else:
+            root = toplevel(args.repo) if args.command != "pre-receive" else os.path.abspath(args.repo)
         return args.func(args, root)
     except (ConfigError, GitError) as exc:
         print("tripwire: error: %s" % exc, file=sys.stderr)

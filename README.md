@@ -77,6 +77,38 @@ server-side or CI check below remains the real gate. Nothing can stop someone
 from editing files in their own clone; tripwire stops unapproved changes from
 landing on protected branches.
 
+## AI coding agents (Claude Code)
+
+Stop an AI agent from changing protected code *before* it touches the disk:
+
+```bash
+tripwire install-claude-hook      # adds a PreToolUse hook to .claude/settings.json
+```
+
+The agent acts as its own identity (`TRIPWIRE_AI_ACTOR`, default `ai-agent`),
+which is not an owner unless you list it. When it tries to `Edit`, `MultiEdit`
+or `Write` a protected block, the call is refused with a message naming who may
+approve it, and the request is recorded. A human then approves that exact
+change **from an interactive terminal**:
+
+```bash
+tripwire pending                                  # what was blocked
+tripwire grant <id> --approver anna               # the agent can now retry the same edit
+```
+
+The approval is bound to the exact before/after content, so a different edit
+is blocked again. To let the agent edit a block freely, list its identity as an
+owner of that lock. Rules are read from the committed version (`HEAD`), and the
+agent cannot edit the rules or approvals files, run `tripwire grant`, or touch
+those files through `Bash`.
+
+Limits: shell commands that rewrite files (`sed -i`, redirects, scripts) are not
+inspected, so keep the pre-commit hook and the server / CI check as backstops.
+`grant` trusts whoever runs it in a terminal; a person with shell access can
+also edit `.tripwire/approvals.json` by hand. Verified with simulated hook
+payloads in the documented format, not yet end to end inside a live Claude Code
+session.
+
 ## Platforms
 
 | Platform | Enforce with | Approvals from | Verified |
