@@ -13,5 +13,5 @@ tripwire:
   variables:
     GIT_DEPTH: "0"
   script:
-    - pip install tripwire
+    - pip install tripwire-git
     - tripwire gitlab-check

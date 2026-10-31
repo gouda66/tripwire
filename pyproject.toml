@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tripwire"
+name = "tripwire-git"
 version = "0.1.0"
 description = "Protect blocks of code in Git: changes need approval from an owner, an approver or a leader."
 readme = "README.md"

@@ -30,7 +30,7 @@ required check on GitHub, GitLab and Gitea / Forgejo.
 3. Check a change:
 
    ```bash
-   pip install tripwire
+   pip install tripwire-git
    tripwire preflight --actor dave        # uncommitted changes vs HEAD
    ```
 

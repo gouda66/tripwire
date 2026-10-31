@@ -208,7 +208,7 @@ wheels = [
 ]
 
 [[package]]
-name = "tripwire"
+name = "tripwire-git"
 version = "0.1.0"
 source = { editable = "." }
 

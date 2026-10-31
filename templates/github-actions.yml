@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install tripwire
+      - run: pip install tripwire-git
       - run: tripwire github-check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
